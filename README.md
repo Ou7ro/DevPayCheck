@@ -10,8 +10,8 @@ pip install -r requirements.txt
 
 ## Переменные окружения
 Требуется создать файл `.env` и прописать следующие переменные окружения:
-- SECRET_KEY=your_superjob_secret_key
-- ACCESS_TOKEN=your_superjob_access_token
+- SJ_SECRET_KEY=your_superjob_secret_key
+- SJ_ACCESS_TOKEN=your_superjob_access_token
 
 О том где их получить, подробнее [Здесь](https://api.superjob.ru/#gettin)
 

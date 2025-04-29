@@ -8,11 +8,13 @@ from terminaltables import AsciiTable
 def get_response_hhru(prog_language, page):
     hh_url = 'https://api.hh.ru/vacancies/'
     mosсow_id = 1
+    professional_role_id = 96
+    period_in_days = 30
     payload = {
         'text': prog_language,
-        'professional_role': 96,
+        'professional_role': professional_role_id,
         'area': mosсow_id,
-        'period': 30,
+        'period': period_in_days,
         'page': page,
     }
 
@@ -41,64 +43,51 @@ def get_response_superjob(prog_language, secret_key, sj_token, page):
 def get_statistics_hhru(popular_languages):
     vacancies_stats = {}
     for prog_language in popular_languages:
-        try:
-            all_salaries = []
-            max_pages = 20
-            for page in count(start=0):
-                if page > 0:
-                    time.sleep(0.5)
-
-                full_response = get_response_hhru(prog_language, page)
-
-                total_vacancies = full_response['found']
-                actual_pages = min(full_response['pages'], max_pages)
-
-                for vacancy in full_response['items']:
-                    salary = predict_rub_salary_for_hh(vacancy['salary'])
-                    if salary is not None:
-                        all_salaries.append(salary)
-
-                if page >= actual_pages - 1:
-                    break
-
-            avg_salary = sum(all_salaries) / len(all_salaries) if all_salaries else 0
-            vacancies_stats[prog_language] = {
-                'Вакансий найдено': int(total_vacancies),
-                'Вакансий обработано': len(all_salaries),
-                'Средняя зарплата': int(avg_salary),
-            }
-        except Exception as e:
-            print(f'Ошибка обработки вакансий через HeadHunter для {prog_language}: {e}')
+        all_salaries = []
+        max_pages = 20
+        for page in count(start=0):
+            if page > 0:
+                time.sleep(0.5)
+            full_response = get_response_hhru(prog_language, page)
+            total_vacancies = full_response['found']
+            actual_pages = min(full_response['pages'], max_pages)
+            for vacancy in full_response['items']:
+                salary = predict_rub_salary_for_hh(vacancy['salary'])
+                if salary:
+                    all_salaries.append(salary)
+            if page >= actual_pages - 1:
+                break
+        avg_salary = sum(all_salaries) / len(all_salaries) if all_salaries else 0
+        vacancies_stats[prog_language] = {
+            'Вакансий найдено': total_vacancies,
+            'Вакансий обработано': len(all_salaries),
+            'Средняя зарплата': int(avg_salary),
+        }
     return vacancies_stats
 
 
 def get_statistics_sj(popular_languages, secret_key, sj_token):
     vacancies_stats = {}
     for prog_language in popular_languages:
-        try:
-            all_salaries = []
-            for page in count(start=0):
-                if page > 0:
-                    time.sleep(0.2)
-                full_response = get_response_superjob(prog_language, secret_key, sj_token, page)
-                if not page:
-                    total_vacancies = full_response['total']
-
-                for vacancy in full_response['objects']:
-                    salary = predict_rub_salary_for_superjob(vacancy)
-                    if salary is not None:
-                        all_salaries.append(salary)
-                if not full_response['more']:
-                    break
-
-            avg_salary = sum(all_salaries) / len(all_salaries) if all_salaries else 0
-            vacancies_stats[prog_language] = {
-                'Вакансий найдено': int(total_vacancies),
-                'Вакансий обработано': len(all_salaries),
-                'Средняя зарплата': int(avg_salary),
-            }
-        except Exception as e:
-            print(f'Ошибка обработки вакансий через SuperJob для {prog_language}: {e}')
+        all_salaries = []
+        for page in count(start=0):
+            if page > 0:
+                time.sleep(0.2)
+            full_response = get_response_superjob(prog_language, secret_key, sj_token, page)
+            if not page:
+                total_vacancies = full_response['total']
+            for vacancy in full_response['objects']:
+                salary = predict_rub_salary_for_superjob(vacancy)
+                if salary:
+                    all_salaries.append(salary)
+            if not full_response['more']:
+                break
+        avg_salary = sum(all_salaries) / len(all_salaries) if all_salaries else 0
+        vacancies_stats[prog_language] = {
+            'Вакансий найдено': total_vacancies,
+            'Вакансий обработано': len(all_salaries),
+            'Средняя зарплата': int(avg_salary),
+        }
     return vacancies_stats
 
 
@@ -139,35 +128,29 @@ def create_table_with_vacancies(vacancy_statistics, title):
 
 
 def main():
-    try:
-        env.read_env()
-        secret_key = env.str('SECRET_KEY')
-        sj_token = env.str('ACCESS_TOKEN')
+    env.read_env()
+    secret_key = env.str('SJ_SECRET_KEY')
+    sj_token = env.str('SJ_ACCESS_TOKEN')
+    if not secret_key or not sj_token:
+        raise ValueError("Не задан SECRET_KEY или ACCESS_TOKEN")
+    title_hhru = 'HeadHunter Moscow'
+    title_sj = 'SuperJob Moscow'
+    popular_languages = [
+        'Python',
+        'Javascript',
+        '1c',
+        'ruby',
+        'C',
+        'C#',
+        'C++',
+        'PHP'
+    ]
 
-        if not secret_key or not sj_token:
-            raise ValueError("Не задан SECRET_KEY или ACCESS_TOKEN")
+    statistics_sj = get_statistics_sj(popular_languages, secret_key, sj_token)
+    statistics_hhru = get_statistics_hhru(popular_languages)
 
-        title_hhru = 'HeadHunter Moscow'
-        title_sj = 'SuperJob Moscow'
-        popular_languages = [
-            'Python',
-            'Javascript',
-            '1c',
-            'ruby',
-            'C',
-            'C#',
-            'C++',
-            'PHP'
-        ]
-
-        print(create_table_with_vacancies(
-            get_statistics_sj(popular_languages, secret_key, sj_token),
-            title_sj))
-        print(create_table_with_vacancies(
-            get_statistics_hhru(popular_languages),
-            title_hhru))
-    except Exception as e:
-        print(f'\nОшибка: {e}')
+    print(create_table_with_vacancies(statistics_sj, title_sj))
+    print(create_table_with_vacancies(statistics_hhru, title_hhru))
 
 
 if __name__ == '__main__':
